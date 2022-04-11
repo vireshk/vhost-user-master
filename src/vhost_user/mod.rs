@@ -1,4 +1,6 @@
-pub mod vu_common_ctrl;
+mod vu_common_ctrl;
+
+pub use crate::vhost_user::vu_common_ctrl::*;
 
 use libc::EFD_NONBLOCK;
 use log::{warn, error, info};
@@ -32,8 +34,6 @@ use vm_memory::{
     GuestMemoryAtomic, GuestUsize
 };
 use vmm_sys_util::eventfd::EventFd;
-
-use crate::vhost_user::vu_common_ctrl::VhostUserHandle;
 
 pub type GuestMemoryMmap = vm_memory::GuestMemoryMmap<AtomicBitmap>;
 pub type GuestRegionMmap = vm_memory::GuestRegionMmap<AtomicBitmap>;

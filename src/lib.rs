@@ -1,2 +1,5 @@
-pub mod vhost_user;
-pub mod device;
+mod vhost_user;
+mod device;
+
+pub use crate::vhost_user::*;
+pub use crate::device::*;
