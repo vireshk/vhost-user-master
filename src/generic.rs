@@ -4,27 +4,22 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::vec::Vec;
 
-use vhost::vhost_user::message::{
-    VhostUserProtocolFeatures, VhostUserVirtioFeatures,
-};
+use vhost::vhost_user::message::VhostUserProtocolFeatures;
 use vhost::vhost_user::{MasterReqHandler, VhostUserMaster, VhostUserMasterReqHandler};
 use virtio_queue::Queue;
 use vm_memory::GuestMemoryAtomic;
 use vmm_sys_util::eventfd::EventFd;
 
-use crate::vhost_user::{ActivateResult, VirtioCommon, VirtioDevice, VirtioDeviceType};
-use crate::vhost_user::vu_common_ctrl::{VhostUserConfig, VhostUserHandle};
-use crate::vhost_user::VhostUserCommon;
-use crate::vhost_user::{Error, Result, DEFAULT_VIRTIO_FEATURES};
-use crate::vhost_user::Thread;
-use crate::vhost_user::spawn_virtio_thread;
-use crate::vhost_user::VirtioInterrupt;
-use crate::vhost_user::{GuestMemoryMmap, GuestRegionMmap};
+use crate::{ActivateResult, VirtioCommon, VirtioDevice};
+use crate::{VhostUserConfig, VhostUserHandle};
+use crate::VhostUserCommon;
+use crate::{Error, Result};
+use crate::Thread;
+use crate::spawn_virtio_thread;
+use crate::VirtioInterrupt;
+use crate::{GuestMemoryMmap, GuestRegionMmap};
 
-const NUM_QUEUES: usize = 1;
-
-/// Virtio Feature bits
-const VIRTIO_I2C_F_ZERO_LENGTH_REQUEST: u16 = 0;
+const MIN_NUM_QUEUES: usize = 1;
 
 pub struct State {
     pub avail_features: u64,
@@ -44,26 +39,64 @@ pub struct Generic {
     epoll_thread: Option<thread::JoinHandle<()>>,
     seccomp_action: SeccompAction,
     exit_evt: EventFd,
+    device_features: u64,
+    num_queues: u32,
 }
 
 impl Generic {
     /// Create a new vhost-user-blk device
     pub fn new(
-        id: String,
         vu_cfg: VhostUserConfig,
         seccomp_action: SeccompAction,
         exit_evt: EventFd,
+        device_type: u32,
     ) -> Result<Generic> {
         let num_queues = vu_cfg.num_queues;
 
-        let mut vu =
+        let vu =
             VhostUserHandle::connect_vhost_user(false, &vu_cfg.socket, num_queues as u64, false)?;
+        let device_features = vu.device_features()?;
 
-        // Filling device and vring features VMM supports.
-        let avail_features = 
-            1 << VIRTIO_I2C_F_ZERO_LENGTH_REQUEST
-            | DEFAULT_VIRTIO_FEATURES;
+        Ok(Generic {
+            common: VirtioCommon {
+                device_type,
+                queue_sizes: vec![vu_cfg.queue_size; num_queues],
+                avail_features: 0,
+                acked_features: 0,
+                paused_sync: Some(Arc::new(Barrier::new(2))),
+                min_queues: MIN_NUM_QUEUES as u16,
+                ..Default::default()
+            },
+            vu_common: VhostUserCommon {
+                vu: Some(Arc::new(Mutex::new(vu))),
+                acked_protocol_features: 0,
+                socket_path: vu_cfg.socket,
+                vu_num_queues: num_queues,
+                ..Default::default()
+            },
+            id: "generic_device".to_string(),
+            guest_memory: None,
+            epoll_thread: None,
+            seccomp_action,
+            exit_evt,
+            device_features,
+            num_queues: 0,
+        })
+    }
 
+    pub fn device_features(&self) -> u64 {
+        self.device_features
+    }
+
+    pub fn num_queues(&self) -> u32 {
+        self.num_queues
+    }
+
+    pub fn negotiate_features(
+        &mut self,
+        avail_features: u64,
+    ) -> Result<(u64, u64)> {
+        let mut vu = self.vu_common.vu.as_ref().unwrap().lock().unwrap();
         let avail_protocol_features = VhostUserProtocolFeatures::MQ;
 
         let (acked_features, acked_protocol_features) =
@@ -75,42 +108,20 @@ impl Generic {
                     .get_queue_num()
                     .map_err(Error::VhostUserGetQueueMaxNum)? as usize
             } else {
-                NUM_QUEUES
+                MIN_NUM_QUEUES
             };
 
-        if num_queues > backend_num_queues {
+        if self.vu_common.vu_num_queues > backend_num_queues {
             error!("vhost-user-device requested too many queues ({}) since the backend only supports {}\n",
-                num_queues, backend_num_queues);
+                self.vu_common.vu_num_queues, backend_num_queues);
             return Err(Error::BadQueueNum);
         }
 
-        Ok(Generic {
-            common: VirtioCommon {
-                device_type: VirtioDeviceType::Block as u32,
-                queue_sizes: vec![vu_cfg.queue_size; num_queues],
-                avail_features: acked_features,
-                // If part of the available features that have been acked, the
-                // PROTOCOL_FEATURES bit must be already set through the VIRTIO
-                // acked features as we know the guest would never ack it, thus
-                // the feature would be lost.
-                acked_features: acked_features & VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits(),
-                paused_sync: Some(Arc::new(Barrier::new(2))),
-                min_queues: NUM_QUEUES as u16,
-                ..Default::default()
-            },
-            vu_common: VhostUserCommon {
-                vu: Some(Arc::new(Mutex::new(vu))),
-                acked_protocol_features,
-                socket_path: vu_cfg.socket,
-                vu_num_queues: num_queues,
-                ..Default::default()
-            },
-            id,
-            guest_memory: None,
-            epoll_thread: None,
-            seccomp_action,
-            exit_evt,
-        })
+        self.common.acked_features = acked_features;
+        self.vu_common.acked_protocol_features = acked_protocol_features;
+        self.num_queues = backend_num_queues as u32;
+
+        Ok((acked_features, acked_protocol_features))
     }
 
     pub fn state(&self) -> State {

@@ -149,6 +149,13 @@ impl VhostUserHandle {
         Ok((acked_features, acked_protocol_features.bits()))
     }
 
+    pub fn device_features(&self) -> Result<u64> {
+        self
+            .vu
+            .get_features()
+            .map_err(Error::VhostUserGetFeatures)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn setup_vhost_user<S: VhostUserMasterReqHandler>(
         &mut self,
@@ -267,7 +274,9 @@ impl VhostUserHandle {
                 .map_err(Error::VhostUserSetVringKick)?;
         }
 
-        self.enable_vhost_user_vrings(num_queues, true)?;
+        if acked_features & VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits() != 0 {
+            self.enable_vhost_user_vrings(num_queues, true)?;
+        }
 
         if let Some(slave_req_handler) = slave_req_handler {
             self.vu

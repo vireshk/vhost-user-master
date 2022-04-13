@@ -239,6 +239,30 @@ impl From<u32> for VirtioDeviceType {
     }
 }
 
+impl From<&str> for VirtioDeviceType {
+    fn from(t: &str) -> Self {
+        match t {
+            "net" => VirtioDeviceType::Net,
+            "block" => VirtioDeviceType::Block,
+            "console" => VirtioDeviceType::Console,
+            "rng" => VirtioDeviceType::Rng,
+            "balloon" => VirtioDeviceType::Balloon,
+            "fs9p" => VirtioDeviceType::Fs9P,
+            "gpu" => VirtioDeviceType::Gpu,
+            "input" => VirtioDeviceType::Input,
+            "vsock" => VirtioDeviceType::Vsock,
+            "iommu" => VirtioDeviceType::Iommu,
+            "mem" => VirtioDeviceType::Mem,
+            "fs" => VirtioDeviceType::Fs,
+            "pmem" => VirtioDeviceType::Pmem,
+            "i2c" => VirtioDeviceType::I2c,
+            "watchdog" => VirtioDeviceType::Watchdog,
+            "gpio" => VirtioDeviceType::Gpio,
+            _ => VirtioDeviceType::Unknown,
+        }
+    }
+}
+
 // In order to use the `{}` marker, the trait `fmt::Display` must be implemented
 // manually for the type VirtioDeviceType.
 impl fmt::Display for VirtioDeviceType {
@@ -580,51 +604,6 @@ pub trait VirtioInterrupt: Send + Sync {
     fn trigger(&self, int_type: VirtioInterruptType) -> std::result::Result<(), std::io::Error>;
     fn notifier(&self, _int_type: VirtioInterruptType) -> Option<EventFd> {
         None
-    }
-}
-
-pub struct NoopVirtioInterrupt {
-    irq_fd: EventFd,
-}
-
-impl NoopVirtioInterrupt {
-    pub fn new() -> NoopVirtioInterrupt {
-        NoopVirtioInterrupt {
-            irq_fd: EventFd::new(libc::EFD_NONBLOCK).unwrap(),
-        }
-    }
-
-    pub fn new_with_eventfd(fd: EventFd) -> NoopVirtioInterrupt {
-        NoopVirtioInterrupt {
-            irq_fd: fd,
-        }
-    }
-
-    pub fn clone(&self) -> Self {
-        Self {
-            irq_fd: self.irq_fd.try_clone().unwrap()
-        }
-    }
-
-    pub fn public_notifier(&self) -> EventFd {
-        self.irq_fd.try_clone().unwrap()
-    }
-}
-
-impl VirtioInterrupt for NoopVirtioInterrupt {
-    fn trigger(
-        &self,
-        _int_type: VirtioInterruptType,
-        ) -> std::result::Result<(), std::io::Error> {
-        self.irq_fd.write(1)
-    }
-
-    fn notifier(&self, _int_type: VirtioInterruptType) -> Option<EventFd> {
-        Some(
-            self.irq_fd
-                .try_clone()
-                .expect("Failed cloning interrupt's EventFd"),
-        )
     }
 }
 

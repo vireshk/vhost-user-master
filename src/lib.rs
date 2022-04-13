@@ -1,5 +1,5 @@
 mod vhost_user;
-mod device;
+mod generic;
 
 pub use crate::vhost_user::*;
-pub use crate::device::*;
+pub use crate::generic::*;
