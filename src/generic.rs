@@ -41,6 +41,7 @@ pub struct Generic {
     exit_evt: EventFd,
     device_features: u64,
     num_queues: u32,
+    name: String,
 }
 
 impl Generic {
@@ -81,11 +82,16 @@ impl Generic {
             exit_evt,
             device_features,
             num_queues: 0,
+            name: vu_cfg.name,
         })
     }
 
     pub fn device_features(&self) -> u64 {
         self.device_features
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn num_queues(&self) -> u32 {

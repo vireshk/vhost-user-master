@@ -37,6 +37,7 @@ const VHOST_LOG_PAGE: u64 = 0x1000;
 
 #[derive(Debug, Clone)]
 pub struct VhostUserConfig {
+    pub name: String,
     pub socket: String,
     pub num_queues: usize,
     pub queue_size: u16,
