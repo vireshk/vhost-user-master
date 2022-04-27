@@ -10,7 +10,7 @@ use virtio_queue::Queue;
 use vm_memory::GuestMemoryAtomic;
 use vmm_sys_util::eventfd::EventFd;
 
-use crate::{ActivateResult, VirtioCommon, VirtioDevice};
+use crate::{ActivateResult, VirtioCommon, VirtioDevice, VirtioDeviceType};
 use crate::{VhostUserConfig, VhostUserHandle};
 use crate::VhostUserCommon;
 use crate::{Error, Result};
@@ -50,9 +50,9 @@ impl Generic {
         vu_cfg: VhostUserConfig,
         seccomp_action: SeccompAction,
         exit_evt: EventFd,
-        device_type: u32,
     ) -> Result<Generic> {
-        let num_queues = vu_cfg.num_queues;
+        let queue_sizes = vu_cfg.device_type.queue_sizes();
+        let num_queues = queue_sizes.len();
 
         let vu =
             VhostUserHandle::connect_vhost_user(false, &vu_cfg.socket, num_queues as u64, false)?;
@@ -60,8 +60,8 @@ impl Generic {
 
         Ok(Generic {
             common: VirtioCommon {
-                device_type,
-                queue_sizes: vec![vu_cfg.queue_size; num_queues],
+                device_type: vu_cfg.device_type,
+                queue_sizes,
                 avail_features: 0,
                 acked_features: 0,
                 paused_sync: Some(Arc::new(Barrier::new(2))),
@@ -82,7 +82,7 @@ impl Generic {
             exit_evt,
             device_features,
             num_queues: 0,
-            name: vu_cfg.name,
+            name: String::from(vu_cfg.device_type),
         })
     }
 
@@ -90,12 +90,8 @@ impl Generic {
         self.device_features
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn num_queues(&self) -> u32 {
-        self.num_queues
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 
     pub fn negotiate_features(
@@ -168,7 +164,7 @@ impl Drop for Generic {
 }
 
 impl VirtioDevice for Generic {
-    fn device_type(&self) -> u32 {
+    fn device_type(&self) -> VirtioDeviceType {
         self.common.device_type
     }
 

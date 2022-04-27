@@ -4,8 +4,8 @@
 use crate::vhost_user::Inflight;
 use super::{Error, Result};
 use super::{
-    get_host_address_range, GuestMemoryMmap, GuestRegionMmap, MmapRegion, VirtioInterrupt,
-    VirtioInterruptType,
+    get_host_address_range, GuestMemoryMmap, GuestRegionMmap, MmapRegion, VirtioDeviceType,
+    VirtioInterrupt, VirtioInterruptType,
 };
 
 use log::{info, error};
@@ -37,10 +37,8 @@ const VHOST_LOG_PAGE: u64 = 0x1000;
 
 #[derive(Debug, Clone)]
 pub struct VhostUserConfig {
-    pub name: String,
+    pub device_type: VirtioDeviceType,
     pub socket: String,
-    pub num_queues: usize,
-    pub queue_size: u16,
 }
 
 #[derive(Clone)]

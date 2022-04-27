@@ -215,27 +215,9 @@ pub enum VirtioDeviceType {
     Unknown = 0xFF,
 }
 
-impl From<u32> for VirtioDeviceType {
-    fn from(t: u32) -> Self {
-        match t {
-            1 => VirtioDeviceType::Net,
-            2 => VirtioDeviceType::Block,
-            3 => VirtioDeviceType::Console,
-            4 => VirtioDeviceType::Rng,
-            5 => VirtioDeviceType::Balloon,
-            9 => VirtioDeviceType::Fs9P,
-            16 => VirtioDeviceType::Gpu,
-            18 => VirtioDeviceType::Input,
-            19 => VirtioDeviceType::Vsock,
-            23 => VirtioDeviceType::Iommu,
-            24 => VirtioDeviceType::Mem,
-            26 => VirtioDeviceType::Fs,
-            27 => VirtioDeviceType::Pmem,
-            34 => VirtioDeviceType::I2c,
-            35 => VirtioDeviceType::Watchdog,
-            41 => VirtioDeviceType::Gpio,
-            _ => VirtioDeviceType::Unknown,
-        }
+impl Default for VirtioDeviceType {
+    fn default() -> Self {
+        VirtioDeviceType::Unknown
     }
 }
 
@@ -263,12 +245,9 @@ impl From<&str> for VirtioDeviceType {
     }
 }
 
-// In order to use the `{}` marker, the trait `fmt::Display` must be implemented
-// manually for the type VirtioDeviceType.
-impl fmt::Display for VirtioDeviceType {
-    // This trait requires `fmt` with this exact signature.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let output = match *self {
+impl From<VirtioDeviceType> for String {
+    fn from(t: VirtioDeviceType) -> String {
+        match t {
             VirtioDeviceType::Net => "net",
             VirtioDeviceType::Block => "block",
             VirtioDeviceType::Console => "console",
@@ -286,8 +265,41 @@ impl fmt::Display for VirtioDeviceType {
             VirtioDeviceType::Watchdog => "watchdog",
             VirtioDeviceType::Gpio => "gpio",
             VirtioDeviceType::Unknown => "unknown",
-        };
-        write!(f, "{}", output)
+        }.to_string()
+    }
+}
+
+// In order to use the `{}` marker, the trait `fmt::Display` must be implemented
+// manually for the type VirtioDeviceType.
+impl fmt::Display for VirtioDeviceType {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", String::from(*self))
+    }
+}
+
+impl VirtioDeviceType {
+    // Returns size of all the queues
+    pub fn queue_sizes(&self) -> Vec<u16> {
+        match *self {
+            VirtioDeviceType::Net => vec![0],
+            VirtioDeviceType::Block => vec![0],
+            VirtioDeviceType::Console => vec![0],
+            VirtioDeviceType::Rng => vec![0],
+            VirtioDeviceType::Balloon => vec![0],
+            VirtioDeviceType::Gpu => vec![0],
+            VirtioDeviceType::Fs9P => vec![0],
+            VirtioDeviceType::Input => vec![0],
+            VirtioDeviceType::Vsock => vec![0],
+            VirtioDeviceType::Iommu => vec![0],
+            VirtioDeviceType::Mem => vec![0],
+            VirtioDeviceType::Fs => vec![0],
+            VirtioDeviceType::Pmem => vec![0],
+            VirtioDeviceType::I2c => vec![1024],
+            VirtioDeviceType::Watchdog => vec![0],
+            VirtioDeviceType::Gpio => vec![256, 256],
+            _ => vec![0],
+        }
     }
 }
 
@@ -640,7 +652,7 @@ pub struct VirtioSharedMemoryList {
 /// resets its internal.
 pub trait VirtioDevice: Send {
     /// The virtio device type.
-    fn device_type(&self) -> u32;
+    fn device_type(&self) -> VirtioDeviceType;
 
     /// The maximum size of each queue that this device supports.
     fn queue_max_sizes(&self) -> &[u16];
@@ -659,7 +671,7 @@ pub trait VirtioDevice: Send {
     fn read_config(&self, _offset: u64, _data: &mut [u8]) {
         warn!(
             "No readable configuration fields for {}",
-            VirtioDeviceType::from(self.device_type())
+            self.device_type()
         );
     }
 
@@ -667,7 +679,7 @@ pub trait VirtioDevice: Send {
     fn write_config(&mut self, _offset: u64, _data: &[u8]) {
         warn!(
             "No writable configuration fields for {}",
-            VirtioDeviceType::from(self.device_type())
+            self.device_type()
         );
     }
 
@@ -732,7 +744,7 @@ pub trait VirtioDevice: Send {
                 config_len,
                 offset,
                 data_len,
-                self.device_type()
+                self.device_type()  as u32
             );
             return;
         }
@@ -752,7 +764,7 @@ pub trait VirtioDevice: Send {
                     config_len,
                     offset,
                     data_len,
-                    self.device_type()
+                    self.device_type() as u32
                 );
             return;
         }
@@ -788,7 +800,7 @@ pub struct VirtioCommon {
     pub paused_sync: Option<Arc<Barrier>>,
     pub epoll_threads: Option<Vec<JoinHandle<()>>>,
     pub queue_sizes: Vec<u16>,
-    pub device_type: u32,
+    pub device_type: VirtioDeviceType,
     pub min_queues: u16,
 }
 
