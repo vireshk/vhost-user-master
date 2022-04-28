@@ -4,7 +4,7 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::vec::Vec;
 
-use vhost::vhost_user::message::VhostUserProtocolFeatures;
+use vhost::vhost_user::message::{VhostUserConfigFlags, VhostUserProtocolFeatures};
 use vhost::vhost_user::{MasterReqHandler, VhostUserMaster, VhostUserMasterReqHandler};
 use virtio_queue::Queue;
 use vm_memory::GuestMemoryAtomic;
@@ -180,10 +180,28 @@ impl VirtioDevice for Generic {
         self.common.ack_features(value)
     }
 
-    fn read_config(&self, _offset: u64, _data: &mut [u8]) {
+    fn read_config(&self, offset: u64, data: &mut [u8]) {
+        let mut vu = self.vu_common.vu.as_ref().unwrap().lock().unwrap();
+        let len = data.len();
+        let config_space: Vec<u8> = vec![0u8; len];
+        let (_, config_space) = vu
+            .socket_handle()
+            .get_config(
+                offset as u32,
+                len as u32,
+                VhostUserConfigFlags::WRITABLE,
+                config_space.as_slice(),
+            ).unwrap();
+
+        data.copy_from_slice(config_space.as_slice());
     }
 
-    fn write_config(&mut self, _offset: u64, _data: &[u8]) {
+    fn write_config(&mut self, offset: u64, data: &[u8]) {
+        let mut vu = self.vu_common.vu.as_ref().unwrap().lock().unwrap();
+        vu
+            .socket_handle()
+            .set_config(offset as u32, VhostUserConfigFlags::WRITABLE, data)
+            .unwrap();
     }
 
     fn activate(
