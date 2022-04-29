@@ -4,7 +4,7 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::vec::Vec;
 
-use vhost::vhost_user::message::{VhostUserConfigFlags, VhostUserProtocolFeatures};
+use vhost::vhost_user::message::{VhostUserConfigFlags, VhostUserProtocolFeatures, VhostUserVirtioFeatures};
 use vhost::vhost_user::{MasterReqHandler, VhostUserMaster, VhostUserMasterReqHandler};
 use virtio_queue::Queue;
 use vm_memory::GuestMemoryAtomic;
@@ -99,7 +99,18 @@ impl Generic {
         avail_features: u64,
     ) -> Result<(u64, u64)> {
         let mut vu = self.vu_common.vu.as_ref().unwrap().lock().unwrap();
-        let avail_protocol_features = VhostUserProtocolFeatures::MQ;
+        let avail_protocol_features = VhostUserProtocolFeatures::MQ |
+            VhostUserProtocolFeatures::CONFIG | VhostUserProtocolFeatures::REPLY_ACK;
+
+        // Virtio spec says following for VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits():
+        //
+        // Bit 30 is used by qemu’s implementation to check for experimental early versions of
+        // virtio which did not perform correct feature negotiation, and SHOULD NOT be negotiated.
+        //
+        // And so Linux clears it in available features. Lets set it forcefully here to make things
+        // work.
+
+        let avail_features = avail_features | VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits();
 
         let (acked_features, acked_protocol_features) =
             vu.negotiate_features_vhost_user(avail_features, avail_protocol_features)?;
