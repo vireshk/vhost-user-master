@@ -161,7 +161,7 @@ impl VhostUserHandle {
         mem: &GuestMemoryMmap,
         queues: Vec<Queue<GuestMemoryAtomic<GuestMemoryMmap>>>,
         queue_evts: Vec<EventFd>,
-        virtio_interrupt: &Arc<dyn VirtioInterrupt>,
+        interrupt: &Arc<dyn VirtioInterrupt>,
         acked_features: u64,
         slave_req_handler: &Option<MasterReqHandler<S>>,
         inflight: Option<&mut Inflight>,
@@ -261,7 +261,7 @@ impl VhostUserHandle {
                 .map_err(Error::VhostUserSetVringBase)?;
 
             if let Some(eventfd) =
-                virtio_interrupt.notifier(VirtioInterruptType::Queue(queue_index as u16))
+                interrupt.notifier(VirtioInterruptType::Queue(queue_index as u16))
             {
                 self.vu
                     .set_vring_call(queue_index, &eventfd)
@@ -341,7 +341,7 @@ impl VhostUserHandle {
         mem: &GuestMemoryMmap,
         queues: Vec<Queue<GuestMemoryAtomic<GuestMemoryMmap>>>,
         queue_evts: Vec<EventFd>,
-        virtio_interrupt: &Arc<dyn VirtioInterrupt>,
+        interrupt: &Arc<dyn VirtioInterrupt>,
         acked_features: u64,
         acked_protocol_features: u64,
         slave_req_handler: &Option<MasterReqHandler<S>>,
@@ -353,7 +353,7 @@ impl VhostUserHandle {
             mem,
             queues,
             queue_evts,
-            virtio_interrupt,
+            interrupt,
             acked_features,
             slave_req_handler,
             inflight,

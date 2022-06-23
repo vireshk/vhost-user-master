@@ -476,7 +476,7 @@ pub struct VhostUserEpollHandler<S: VhostUserMasterReqHandler> {
     pub pause_evt: EventFd,
     pub queues: Vec<Queue<GuestMemoryAtomic<GuestMemoryMmap>>>,
     pub queue_evts: Vec<EventFd>,
-    pub virtio_interrupt: Arc<dyn VirtioInterrupt>,
+    pub interrupt: Arc<dyn VirtioInterrupt>,
     pub acked_features: u64,
     pub acked_protocol_features: u64,
     pub socket_path: String,
@@ -536,7 +536,7 @@ impl<S: VhostUserMasterReqHandler> VhostUserEpollHandler<S> {
                     .iter()
                     .map(|q| q.try_clone().unwrap())
                     .collect(),
-                &self.virtio_interrupt,
+                &self.interrupt,
                 self.acked_features,
                 self.acked_protocol_features,
                 &self.slave_req_handler,
@@ -687,7 +687,7 @@ pub trait VirtioDevice: Send {
     fn activate(
         &mut self,
         mem: GuestMemoryAtomic<GuestMemoryMmap>,
-        interrupt_evt: Arc<dyn VirtioInterrupt>,
+        interrupt: Arc<dyn VirtioInterrupt>,
         queues: Vec<Queue<GuestMemoryAtomic<GuestMemoryMmap>>>,
         queue_evts: Vec<EventFd>,
     ) -> ActivateResult;
@@ -793,7 +793,7 @@ pub struct VirtioCommon {
     pub avail_features: u64,
     pub acked_features: u64,
     pub kill_evt: Option<EventFd>,
-    pub interrupt_cb: Option<Arc<dyn VirtioInterrupt>>,
+    pub interrupt: Option<Arc<dyn VirtioInterrupt>>,
     pub queue_evts: Option<Vec<EventFd>>,
     pub pause_evt: Option<EventFd>,
     pub paused: Arc<AtomicBool>,
@@ -826,7 +826,7 @@ impl VirtioCommon {
         &mut self,
         queues: &[Queue<GuestMemoryAtomic<GuestMemoryMmap>>],
         queue_evts: &[EventFd],
-        interrupt_cb: &Arc<dyn VirtioInterrupt>,
+        interrupt: &Arc<dyn VirtioInterrupt>,
     ) -> ActivateResult {
         if queues.len() != queue_evts.len() {
             error!(
@@ -860,7 +860,7 @@ impl VirtioCommon {
 
         // Save the interrupt EventFD as we need to return it on reset
         // but clone it to pass into the thread.
-        self.interrupt_cb = Some(interrupt_cb.clone());
+        self.interrupt = Some(interrupt.clone());
 
         let mut tmp_queue_evts: Vec<EventFd> = Vec::new();
         for queue_evt in queue_evts.iter() {
@@ -895,7 +895,7 @@ impl VirtioCommon {
         }
 
         // Return the interrupt
-        Some(self.interrupt_cb.take().unwrap())
+        Some(self.interrupt.take().unwrap())
     }
 
     pub fn dup_eventfds(&self) -> (EventFd, EventFd) {
@@ -923,7 +923,7 @@ impl VhostUserCommon {
         mem: GuestMemoryAtomic<GuestMemoryMmap>,
         queues: Vec<Queue<GuestMemoryAtomic<GuestMemoryMmap>>>,
         queue_evts: Vec<EventFd>,
-        interrupt_cb: Arc<dyn VirtioInterrupt>,
+        interrupt: Arc<dyn VirtioInterrupt>,
         acked_features: u64,
         slave_req_handler: Option<MasterReqHandler<T>>,
         kill_evt: EventFd,
@@ -948,7 +948,7 @@ impl VhostUserCommon {
                 &mem.memory(),
                 queues.clone(),
                 queue_evts.iter().map(|q| q.try_clone().unwrap()).collect(),
-                &interrupt_cb,
+                &interrupt,
                 acked_features,
                 &slave_req_handler,
                 inflight.as_mut(),
@@ -962,7 +962,7 @@ impl VhostUserCommon {
             pause_evt,
             queues,
             queue_evts,
-            virtio_interrupt: interrupt_cb,
+            interrupt,
             acked_features,
             acked_protocol_features: self.acked_protocol_features,
             socket_path: self.socket_path.clone(),

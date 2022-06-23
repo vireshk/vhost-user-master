@@ -218,11 +218,11 @@ impl VirtioDevice for Generic {
     fn activate(
         &mut self,
         mem: GuestMemoryAtomic<GuestMemoryMmap>,
-        interrupt_cb: Arc<dyn VirtioInterrupt>,
+        interrupt: Arc<dyn VirtioInterrupt>,
         queues: Vec<Queue<GuestMemoryAtomic<GuestMemoryMmap>>>,
         queue_evts: Vec<EventFd>,
     ) -> ActivateResult {
-        self.common.activate(&queues, &queue_evts, &interrupt_cb)?;
+        self.common.activate(&queues, &queue_evts, &interrupt)?;
         self.guest_memory = Some(mem.clone());
 
         let slave_req_handler: Option<MasterReqHandler<SlaveReqHandler>> = None;
@@ -235,7 +235,7 @@ impl VirtioDevice for Generic {
             mem,
             queues,
             queue_evts,
-            interrupt_cb,
+            interrupt,
             self.common.acked_features,
             slave_req_handler,
             kill_evt,
@@ -282,7 +282,7 @@ impl VirtioDevice for Generic {
         }
 
         // Return the interrupt
-        Some(self.common.interrupt_cb.take().unwrap())
+        Some(self.common.interrupt.take().unwrap())
     }
 
     fn shutdown(&mut self) {
